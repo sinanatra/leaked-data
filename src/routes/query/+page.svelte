@@ -2,6 +2,8 @@
     import { onMount } from "svelte";
     import { select } from "d3-selection";
     import { zoom, zoomIdentity } from "d3-zoom";
+    import { drag } from "d3-drag";
+
     import {
         fetchEntities,
         fetchConnectedEntities,
@@ -22,38 +24,31 @@
     let transform = zoomIdentity;
     let zoomBehavior;
 
-    function radialLayout(items, cx, cy, radius, containerWidth = window.innerWidth, containerHeight = window.innerHeight) {
+    function radialLayout(
+        items,
+        cx,
+        cy,
+        baseRadius,
+        containerWidth = window.innerWidth,
+        containerHeight = window.innerHeight,
+    ) {
         if (items.length === 1) {
             items[0].x = cx;
             items[0].y = cy;
             return;
         }
-        const centerX = containerWidth / 2;
-        const centerY = containerHeight / 2;
-        const deltaX = cx - centerX;
-        const deltaY = cy - centerY;
-        let startAngle = 0;
-        let endAngle = 2 * Math.PI;
-        if (deltaX >= 0 && deltaY >= 0) {
-            startAngle = Math.PI / 4;
-            endAngle = (3 * Math.PI) / 4;
-        } else if (deltaX < 0 && deltaY >= 0) {
-            startAngle = (3 * Math.PI) / 4;
-            endAngle = (5 * Math.PI) / 4;
-        } else if (deltaX < 0 && deltaY < 0) {
-            startAngle = (5 * Math.PI) / 4;
-            endAngle = (7 * Math.PI) / 4;
-        } else if (deltaX >= 0 && deltaY < 0) {
-            startAngle = (7 * Math.PI) / 4;
-            endAngle = Math.PI / 4;
-        }
-        const adjustedRadius = radius + items.length * 20;
-        const angleStep = (endAngle - startAngle) / items.length;
-        let angle = startAngle;
-        items.forEach((item) => {
-            item.x = cx + adjustedRadius * Math.cos(angle);
-            item.y = cy + adjustedRadius * Math.sin(angle);
-            angle += angleStep;
+
+        const maxRadius = Math.min(containerWidth, containerHeight) / 1.5;
+        const dynamicRadius = Math.min(
+            baseRadius + items.length * 10,
+            maxRadius,
+        );
+        const angleStep = (2 * Math.PI) / items.length;
+
+        items.forEach((item, i) => {
+            const angle = i * angleStep;
+            item.x = cx + dynamicRadius * Math.cos(angle);
+            item.y = cy + dynamicRadius * Math.sin(angle);
         });
     }
 
@@ -90,15 +85,17 @@
         }
         newNodes = [];
         newLinks = [];
+
         connectedData.forEach(({ property, entities }) => {
             entities.forEach((e) => {
                 if (!nodes.find((x) => x.id === e.id)) {
                     const label =
-                        e.properties?.name?.[0] ||
-                        e.label ||
-                        (e.schema && `(${e.schema})`) ||
-                        "Unknown";
-                    newNodes.push({ id: e.id, label, schema: e.schema || "Unknown" });
+                        e.properties?.name?.[0] || e.label || "Unknown";
+                    newNodes.push({
+                        id: e.id,
+                        label,
+                        schema: e.schema || "Unknown",
+                    });
                 }
                 newLinks.push({
                     source: nodeId,
@@ -108,6 +105,7 @@
                 });
             });
         });
+
         similarData.forEach((e) => {
             if (!nodes.find((x) => x.id === e.id)) {
                 newNodes.push({
@@ -123,9 +121,19 @@
                 type: "similar",
             });
         });
+
         if (!newNodes.length) return;
-        radialLayout(newNodes, centerNode.x, centerNode.y, 350, window.innerWidth, window.innerHeight);
+
+        radialLayout(
+            newNodes,
+            centerNode.x,
+            centerNode.y,
+            350,
+            window.innerWidth,
+            window.innerHeight,
+        );
         addNodesAndLinks(newNodes, newLinks);
+
         expansions[nodeId] = newNodes.map((d) => d.id);
     }
 
@@ -138,6 +146,7 @@
                 connectedNodes.add(l.target);
             }
         });
+
         const nodesToRemove = childIds.filter((id) => !connectedNodes.has(id));
         nodes = nodes.filter((n) => !nodesToRemove.includes(n.id));
         links = links.filter(
@@ -170,27 +179,18 @@
         addNodesAndLinks(baseNodes, []);
     }
 
-    function centerGraphOnNode(node) {
-        const scale = transform.k;
-        const translateX = window.innerWidth / 2 - node.x * scale;
-        const translateY = window.innerHeight / 2 - node.y * scale;
-        transform = { x: translateX, y: translateY, k: scale };
-        nodeContainerElement.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
-        linesSvgElement.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
-    }
-
     function handleNodeClick(node) {
         if (!expansions[node.id] || expansions[node.id].length === 0) {
             expandNode(node.id);
         } else {
             collapseNode(node.id);
         }
-        // centerGraphOnNode(node);
     }
 
     onMount(async () => {
         linesSvgElement.style.transformOrigin = "0 0";
         nodeContainerElement.style.transformOrigin = "0 0";
+
         zoomBehavior = zoom()
             .scaleExtent([0.1, 10])
             .on("zoom", (event) => {
@@ -199,9 +199,40 @@
                 nodeContainerElement.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
                 linesSvgElement.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
             });
+
         select(graphContainer).call(zoomBehavior);
+
         await handleSearch();
     });
+
+    export function draggable(node, params) {
+        const { nodeData, getTransform, onDragUpdate } = params || {};
+
+        const dragBehavior = drag()
+            .clickDistance(5)
+            .on("start", (event) => {
+                event.sourceEvent.stopPropagation();
+            })
+            .on("drag", (event) => {
+                if (!nodeData) return;
+
+                const t = getTransform?.() || { k: 1 };
+                nodeData.x += event.dx / t.k;
+                nodeData.y += event.dy / t.k;
+
+                onDragUpdate?.();
+            })
+            .on("end", () => {});
+
+        select(node).call(dragBehavior);
+
+        return {
+            destroy() {
+                select(node).on(".drag", null);
+            },
+            update(newParams) {},
+        };
+    }
 </script>
 
 <div class="search">
@@ -236,14 +267,19 @@
             {/each}
         </g>
     </svg>
+
     <div class="nodes" bind:this={nodeContainerElement}>
         {#each nodes as node}
             <div
                 class="node"
-                style="
-                    left: {node.x}px;
-                    top: {node.y}px;
-                "
+                style="left: {node.x}px; top: {node.y}px;"
+                use:draggable={{
+                    nodeData: node,
+                    getTransform: () => transform,
+                    onDragUpdate: () => {
+                        nodes = [...nodes];
+                    },
+                }}
                 on:click={() => handleNodeClick(node)}
             >
                 <div class="label">{node.label}</div>
@@ -253,7 +289,8 @@
 </div>
 
 <style>
-    html, body {
+    html,
+    body {
         margin: 0;
         padding: 0;
         overflow: hidden;
@@ -307,8 +344,8 @@
         cursor: pointer;
         pointer-events: auto;
         transform: translate(-50%, -50%);
+        user-select: none;
     }
-
     .label {
         min-width: 60px;
         max-width: 100px;
