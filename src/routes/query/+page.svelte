@@ -265,10 +265,14 @@
     z-index: 2000;
   }
   .info {
-    margin-top: 10px;
-    padding: 5px;
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    z-index: 1000;
     background: #f8f8f8;
-    border: 1px solid #ccc;
+    padding: 4px 8px;
     border-radius: 4px;
+    color: #333;
+    font-size: 12px;
   }
 </style>
