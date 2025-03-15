@@ -8,6 +8,15 @@
   const dispatch = createEventDispatcher();
   let nodeDiv;
 
+  const schemaColors = {
+    Person: "#8d889a",
+    Organisation: "#007BFF",
+    Membership: "#017BFF",
+    Company: "#FF7F50",
+    Government: "#228B22",
+    Unknown: "#ccc",
+  };
+
   function draggable(el) {
     const dragBehavior = drag()
       .clickDistance(5)
@@ -44,9 +53,8 @@
 >
   <div
     class="label"
-    style="background: {node.schema === 'Person'
-      ? '#8d889a'
-      : '#007BFF'}; transform: rotate({(node.angle * 180) /
+    style="background: {schemaColors[node.schema] ||
+      schemaColors.Unknown}; transform: rotate({(node.angle * 180) /
       Math.PI}deg); transform-origin: center;"
   >
     {node.label}
