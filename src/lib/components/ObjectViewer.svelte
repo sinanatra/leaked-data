@@ -1,11 +1,21 @@
 <script>
   import ObjectViewer from "$lib/components/ObjectViewer.svelte";
   export let data;
+
+  $: displayData =
+    typeof data === "object" && data !== null
+      ? data.properties || data.links
+        ? {
+            ...(data.properties || {}),
+            ...(data.links ? { links: data.links } : {}),
+          }
+        : data
+      : data;
 </script>
 
-{#if typeof data === "object" && data !== null}
+{#if typeof displayData === "object" && displayData !== null}
   <ul>
-    {#each Object.entries(data) as [key, value]}
+    {#each Object.entries(displayData) as [key, value]}
       <li>
         <strong>{key}:</strong>
         {#if typeof value === "object" && value !== null}
@@ -17,7 +27,7 @@
     {/each}
   </ul>
 {:else}
-  <span>{data}</span>
+  <span>{displayData}</span>
 {/if}
 
 <style>
