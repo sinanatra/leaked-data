@@ -34,10 +34,7 @@
   }
 
   function handleDragUpdate(event) {
-    const updatedNode = event.detail;
-    nodes = nodes.map((n) =>
-      n.id === updatedNode.id ? { ...updatedNode } : n
-    );
+    dispatch("dragUpdate", event.detail);
   }
 
   $: lineData = links.map((link) => ({
@@ -45,6 +42,18 @@
     source: nodes.find((n) => n.id === link.source),
     target: nodes.find((n) => n.id === link.target),
   }));
+
+  function computeCurve(source, target) {
+    const { x: x1, y: y1 } = source;
+    const { x: x2, y: y2 } = target;
+    const mx = (x1 + x2) / 2;
+    const my = (y1 + y2) / 2;
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    const offset = 30;
+    const cpX = mx + offset * Math.cos(angle - Math.PI / 2);
+    const cpY = my + offset * Math.sin(angle - Math.PI / 2);
+    return `M ${x1} ${y1} Q ${cpX} ${cpY}, ${x2} ${y2}`;
+  }
 </script>
 
 <div class="graph" bind:this={graphContainer}>
@@ -90,7 +99,7 @@
   }
   .link {
     stroke: #889a97;
-    stroke-width: 2;
+    stroke-width: 1;
   }
   .nodes {
     position: absolute;

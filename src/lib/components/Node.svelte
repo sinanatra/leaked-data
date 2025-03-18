@@ -40,12 +40,25 @@
       },
     };
   }
+
+  function getNodeRotation() {
+    let angleDeg = (node.angle * 180) / Math.PI;
+
+    if (angleDeg > 90 || angleDeg < -90) {
+      angleDeg += 180;
+    }
+
+    return `rotate(${angleDeg}deg)`;
+  }
 </script>
 
 <div
   bind:this={nodeDiv}
   class="node"
-  style="left: {node.x}px; top: {node.y}px;"
+  style="
+  left: {node.x}px; top: {node.y}px;
+  <!-- transform: translate(-50%, -50%) {getNodeRotation()}; -->
+  "
   use:draggable
   on:click|stopPropagation={() => dispatch("click", node)}
   on:mouseover={() => dispatch("hover", node)}
@@ -54,8 +67,10 @@
   <div
     class="label"
     style="background: {schemaColors[node.schema] ||
-      schemaColors.Unknown}; transform: rotate({(node.angle * 180) /
-      Math.PI}deg); transform-origin: center;"
+      schemaColors.Unknown}; 
+      <!-- transform: rotate({(node.angle * 180) / Math.PI }deg);  -->
+      <!-- transform-origin: center; -->
+      "
   >
     {node.label}
   </div>

@@ -16,15 +16,14 @@
   let selectedNode = null;
   let hoveredNode = null;
   $: activeNode = hoveredNode || selectedNode;
-
   let infoMessage = "";
 
   function separateArcsBySchemaLayout(
     items,
     cx,
     cy,
-    initialRadius,
-    radiusStep,
+    initialRadius = 50,
+    radiusStep = 50,
     arcSpan = Math.PI
   ) {
     const groups = {};
@@ -35,7 +34,7 @@
     });
     const groupKeys = Object.keys(groups).sort();
     const groupCenterAngles = groupKeys.map(
-      (_, i) => (2 * Math.PI * i) / groupKeys.length
+      (_, i) => (Math.PI * i) / groupKeys.length
     );
     groupKeys.forEach((group, i) => {
       const groupItems = groups[group];
@@ -63,9 +62,9 @@
   function directionalArcsFromParentLayout(
     items,
     parent,
-    baseRadius,
-    radiusStep,
-    arcSpan = (3 * Math.PI) / 2
+    baseRadius = 100,
+    radiusStep = 100,
+    arcSpan = Math.PI
   ) {
     const groups = {};
     items.forEach((item) => {
@@ -73,25 +72,38 @@
       if (!groups[key]) groups[key] = [];
       groups[key].push(item);
     });
+
     const groupKeys = Object.keys(groups).sort();
-    const centerAngle = parent.angle || 0;
-    const startAngle = centerAngle - arcSpan / 2;
+
+    const parentAngle = parent.angle || 0;
+
     groupKeys.forEach((group, i) => {
       const groupItems = groups[group];
       const radius = baseRadius + i * radiusStep;
+      const startAngle = parentAngle - arcSpan / 2;
+      const endAngle = parentAngle + arcSpan / 2;
+
       if (groupItems.length === 1) {
-        groupItems[0].x = parent.x + radius * Math.cos(centerAngle);
-        groupItems[0].y = parent.y + radius * Math.sin(centerAngle);
-        groupItems[0].angle = centerAngle;
+        const angle = parentAngle;
+        groupItems[0].x = parent.x + radius * Math.cos(angle);
+        groupItems[0].y = parent.y + radius * Math.sin(angle);
+        groupItems[0].angle = angle;
         groupItems[0].origin = { x: parent.x, y: parent.y };
+
+        groupItems[0].relativeAngle = 0;
+        groupItems[0].distance = radius;
       } else {
-        const angleStep = arcSpan / (groupItems.length - 1);
+        const angleStep = (endAngle - startAngle) / (groupItems.length - 1);
         groupItems.forEach((item, j) => {
           const angle = startAngle + j * angleStep;
           item.x = parent.x + radius * Math.cos(angle);
           item.y = parent.y + radius * Math.sin(angle);
           item.angle = angle;
           item.origin = { x: parent.x, y: parent.y };
+
+          item.relativeAngle = angle - parentAngle;
+
+          item.distance = radius;
         });
       }
     });
@@ -118,6 +130,7 @@
   async function expandNode(nodeId) {
     const parentNode = nodes.find((n) => n.id === nodeId);
     if (!parentNode) return;
+
     let connectedData = [];
     let similarData = [];
     try {
@@ -130,7 +143,6 @@
     }
     let newNodes = [];
     let newLinks = [];
-
     connectedData.forEach(({ property, entities }) => {
       entities.forEach((e) => {
         if (!nodes.find((x) => x.id === e.id)) {
@@ -166,10 +178,9 @@
     if (!newNodes.length) {
       infoMessage = "No new nodes";
       return;
-    } else {
-      infoMessage = "";
     }
-    directionalArcsFromParentLayout(newNodes, parentNode, 250, 120);
+    infoMessage = "";
+    directionalArcsFromParentLayout(newNodes, parentNode, 150, 50, Math.PI);
     addNodesAndLinks(newNodes, newLinks);
     expansions[nodeId] = newNodes.map((d) => d.id);
   }
@@ -192,6 +203,38 @@
     expansions[nodeId] = [];
   }
 
+  function handleDragUpdate(event) {
+    const updatedNode = event.detail;
+    nodes = nodes.map((n) =>
+      n.id === updatedNode.id ? { ...updatedNode } : n
+    );
+    repositionDescendants(updatedNode.id);
+  }
+
+  function repositionDescendants(parentId) {
+    const parentNode = nodes.find((n) => n.id === parentId);
+    if (!parentNode || !expansions[parentId]) return;
+    expansions[parentId].forEach((childId) => {
+      nodes = nodes.map((child) => {
+        if (child.id === childId) {
+          const newAngle = (parentNode.angle || 0) + (child.relativeAngle || 0);
+
+          const newX = parentNode.x + child.distance * Math.cos(newAngle);
+          const newY = parentNode.y + child.distance * Math.sin(newAngle);
+          return {
+            ...child,
+            x: newX,
+            y: newY,
+            origin: { x: parentNode.x, y: parentNode.y },
+            angle: newAngle,
+          };
+        }
+        return child;
+      });
+      repositionDescendants(childId);
+    });
+  }
+
   async function handleSearch() {
     if (!searchQuery.trim()) return;
     nodes = [];
@@ -210,7 +253,7 @@
       label: e.properties?.name?.[0] || e.label || "Unknown",
       schema: e.schema || "Unknown",
     }));
-    separateArcsBySchemaLayout(baseNodes, centerX, centerY, 50, 200);
+    separateArcsBySchemaLayout(baseNodes, centerX, centerY);
     addNodesAndLinks(baseNodes, []);
     if (baseNodes.length > 0) {
       await expandNode(baseNodes[0].id);
@@ -248,6 +291,7 @@
     bind:links
     on:nodeClick={(e) => handleNodeClick(e.detail)}
     on:nodeHover={(e) => (hoveredNode = e.detail)}
+    on:dragUpdate={handleDragUpdate}
   />
   <Sidebar {activeNode} />
 </div>
