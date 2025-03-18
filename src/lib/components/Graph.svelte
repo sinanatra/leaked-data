@@ -32,7 +32,6 @@
   function handleNodeHover(node) {
     dispatch("nodeHover", node);
   }
-
   function handleDragUpdate(event) {
     dispatch("dragUpdate", event.detail);
   }
@@ -43,16 +42,17 @@
     target: nodes.find((n) => n.id === link.target),
   }));
 
-  function computeCurve(source, target) {
-    const { x: x1, y: y1 } = source;
-    const { x: x2, y: y2 } = target;
-    const mx = (x1 + x2) / 2;
-    const my = (y1 + y2) / 2;
-    const angle = Math.atan2(y2 - y1, x2 - x1);
-    const offset = 30;
-    const cpX = mx + offset * Math.cos(angle - Math.PI / 2);
-    const cpY = my + offset * Math.sin(angle - Math.PI / 2);
-    return `M ${x1} ${y1} Q ${cpX} ${cpY}, ${x2} ${y2}`;
+  function computeMidpoint(source, target) {
+    return {
+      x: (source.x + target.x) / 2,
+      y: (source.y + target.y) / 2,
+    };
+  }
+
+  function computeLabelAngle(source, target) {
+    return (
+      (Math.atan2(target.y - source.y, target.x - source.x) * 180) / Math.PI
+    );
   }
 </script>
 
@@ -69,6 +69,31 @@
             y2={link.target.y}
             stroke-dasharray={link.type === "similar" ? "5,5" : "none"}
           />
+          {#if link.relation}
+            {#key link.source.id + "-" + link.target.id}
+              <text
+                class="relation-label"
+                style="fill: white; stroke-weight: 10px; stroke:white"
+                text-anchor="middle"
+                alignment-baseline="middle"
+                x={computeMidpoint(link.source, link.target).x}
+                y={computeMidpoint(link.source, link.target).y}
+                transform={`rotate(${computeLabelAngle(link.source, link.target)}, ${computeMidpoint(link.source, link.target).x}, ${computeMidpoint(link.source, link.target).y})`}
+              >
+                {link.relation}
+              </text>
+              <text
+                class="relation-label"
+                text-anchor="middle"
+                alignment-baseline="middle"
+                x={computeMidpoint(link.source, link.target).x}
+                y={computeMidpoint(link.source, link.target).y}
+                transform={`rotate(${computeLabelAngle(link.source, link.target)}, ${computeMidpoint(link.source, link.target).x}, ${computeMidpoint(link.source, link.target).y})`}
+              >
+                {link.relation}
+              </text>
+            {/key}
+          {/if}
         {/if}
       {/each}
     </g>
@@ -100,6 +125,11 @@
   .link {
     stroke: #889a97;
     stroke-width: 1;
+  }
+  .relation-label {
+    font-size: 8px;
+    fill: #333;
+    pointer-events: none;
   }
   .nodes {
     position: absolute;

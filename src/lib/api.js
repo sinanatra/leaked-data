@@ -81,22 +81,37 @@ export async function fetchConnectedEntities(
 
     return data.results.map((item) => {
       const propertyName = item.property;
-      const entities = (item.entities || []).map((entity) => ({
-        ...entity,
-        label:
-          entity.properties?.name?.[0] ||
-          entity.label ||
-          entity.properties?.title?.[0] ||
-          entity.properties?.full?.[0] ||
-          entity.properties?.namesMentioned?.[0] ||
-          entity.properties?.entity?.[0] ||
-          entity.properties?.description?.[0] ||
-          entity.properties?.alias?.[0] ||
-          entity.properties?.member?.[0] ||
-          "No Label",
-        id: entity.id || "Unknown ID",
-        property: propertyName,
-      }));
+      const entities = (item.entities || [])
+        .filter((entity) => {
+          if (
+            entity.schema === "Membership" &&
+            entity.properties &&
+            entity.properties.member
+          ) {
+            if (Array.isArray(entity.properties.member)) {
+              return !entity.properties.member.includes(entityId);
+            }
+            return entity.properties.member !== entityId;
+          }
+
+          return entity.id !== entityId;
+        })
+        .map((entity) => ({
+          ...entity,
+          label:
+            entity.properties?.name?.[0] ||
+            entity.label ||
+            entity.properties?.title?.[0] ||
+            entity.properties?.full?.[0] ||
+            entity.properties?.namesMentioned?.[0] ||
+            entity.properties?.entity?.[0] ||
+            entity.properties?.description?.[0] ||
+            entity.properties?.alias?.[0] ||
+            entity.properties?.member?.[0] ||
+            "No Label",
+          id: entity.id || "Unknown ID",
+          property: propertyName,
+        }));
       return { property: propertyName, entities };
     });
   } catch (error) {
@@ -150,6 +165,7 @@ export async function fetchSimilarEntities(entityId, filters = {}) {
           entity.properties?.description?.[0] ||
           entity.properties?.alias?.[0] ||
           entity.properties?.member?.[0] ||
+          entity.properties?.description?.[0] ||
           "No Label",
         schema: entity.schema || "Unknown Type",
         relation: "similar",
