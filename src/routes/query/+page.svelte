@@ -231,7 +231,7 @@
         }
         return child;
       });
-      repositionDescendants(childId);
+      //   repositionDescendants(childId);
     });
   }
 
